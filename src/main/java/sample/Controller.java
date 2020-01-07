@@ -1,22 +1,20 @@
 package sample;
-
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-
 import java.io.File;
 import java.net.URL;
-import java.util.Arrays;
-import java.util.Objects;
-import java.util.ResourceBundle;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
-public class Controller implements Initializable {
-
+public class Controller extends Thread implements Initializable {
     //object to call database functions
     JdbcOracleConnection jdbcOracleConnection = new JdbcOracleConnection();
     boolean dispDown;
@@ -36,18 +34,45 @@ public class Controller implements Initializable {
     Image imageCernerLogo = new Image(cernerLogoFile.toURI().toString());
 
     @FXML
-    private ImageView dispatchDownloadStatusPic;
+    protected ImageView dispatchDownloadStatusPic;
     @FXML
-    private  ImageView collectedDownloadStatusPic;
+    protected ImageView collectedDownloadStatusPic;
     @FXML
-    private ImageView rModeStatusPic;
+    protected ImageView rModeStatusPic;
     @FXML
-    private ImageView cernerLogoUI;
+    protected ImageView cernerLogoUI;
     @FXML
-    private ComboBox spinnerList ;
+    protected ComboBox spinnerList ;
+    @FXML
+    private TreeView<String> instrumetOrderablesUiTree;
 
 
-    public void changePictureAsPerStatus(){
+    public void setupUiTreeForOrderableList(String instrumentNameForTree){
+        TreeItem<String> instrumentNameInTree = new TreeItem<>(instrumentNameForTree);
+        instrumetOrderablesUiTree.setRoot(instrumentNameInTree);
+        String[] cleanedOrderableNameArray = Arrays.stream(jdbcOracleConnection.orderablesNameArray).filter(Objects::nonNull).toArray(String[]::new);
+        for(int i=0; i<cleanedOrderableNameArray.length;i++){
+            TreeItem<String> orderableDispKey = new TreeItem<String> (cleanedOrderableNameArray[i]);
+            instrumentNameInTree.getChildren().add(orderableDispKey);
+        }
+    }
+
+    public void executeUiUserQuery(){
+        String instrumentName = (String) spinnerList.getValue();
+
+            jdbcOracleConnection.getSrcdOfInstName(instrumentName);
+            jdbcOracleConnection.executeQueryOrderableNames();
+            //Function to fetch the orderable names for treeView
+            setupUiTreeForOrderableList(instrumentName);
+
+            dispDown = jdbcOracleConnection.executeQueryDispDown(instrumentName);
+            collDown = jdbcOracleConnection.executeQueryCollDown(instrumentName);
+            rMode = jdbcOracleConnection.executeQueryR_Mode(instrumentName);
+            //Function To Change The Pictures (Green Tick ,Red Cross)
+            changePictureAsPerStatus();
+    }
+
+    public int changePictureAsPerStatus(){
         if(dispDown){
             dispatchDownloadStatusPic.setImage(imageGreenTick);
         }
@@ -66,29 +91,22 @@ public class Controller implements Initializable {
         if(!rMode){
             rModeStatusPic.setImage(imageRedCross);
         }
+        return 1;
     }
-
 
     @FXML
     protected void handleInstNameChange(ActionEvent event) {
-        String instrumentName = (String) spinnerList.getValue();
-
-        dispDown = jdbcOracleConnection.executeQueryDispDown(instrumentName);
-        collDown = jdbcOracleConnection.executeQueryCollDown(instrumentName);
-        rMode = jdbcOracleConnection.executeQueryR_Mode(instrumentName);
-
-        //Function To Change The Pictures (Green Tick ,Red Cross)
-        changePictureAsPerStatus();
+        //Function to execute all Queries
+        executeUiUserQuery();
     }
-
 
     public void initialize (URL location, ResourceBundle resources){
         //Connect To Database
         jdbcOracleConnection.makeDatabaseConnection();
         jdbcOracleConnection.executeQueryInstrumentName();
-        String[] cleanedArray = Arrays.stream(jdbcOracleConnection.instrumentNameArray).filter(Objects::nonNull).toArray(String[]::new);
+        String[] cleanedInstNameArray = Arrays.stream(jdbcOracleConnection.instrumentNameArray).filter(Objects::nonNull).toArray(String[]::new);
+        ObservableList<String> listOfInstruments = FXCollections.observableArrayList(cleanedInstNameArray);
         //Populates The Drop Down Menu (Combo Box)
-        ObservableList<String> listOfInstruments = FXCollections.observableArrayList(cleanedArray);
         spinnerList.setItems(listOfInstruments);
         //Set The Waiting Icon
         cernerLogoUI.setImage(imageCernerLogo);
